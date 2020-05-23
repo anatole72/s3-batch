@@ -51,17 +51,17 @@ def main():
 def create_batches_and_upload(bucket, directory, files, elasticsearch_connection):
     logging.info(bucket)
     logging.info(directory)
-    remaining_files_to_compact = files
+    remaining_files_to_archive = files
     s3_file_prefix = get_bucket_directory_and_prefix(bucket, directory)
 
     elasticsearch_docs = []
     with TemporaryDirectory() as temporary_directory:
-        while remaining_files_to_compact:
+        while remaining_files_to_archive:
             tar = tarfile.open(os.path.join(temporary_directory, f"{uuid4()}.tar"), "w:")
 
-            archive_files = get_batch_files(directory, remaining_files_to_compact)
+            archive_files = get_batch_files(directory, remaining_files_to_archive)
             write_and_close_archive(archive_files, directory, tar)
-            remaining_files_to_compact = remaining_files_to_compact[len(archive_files):]
+            remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
             s3_object_key, s3_object_prefix = send_archive_to_s3(bucket, s3_file_prefix, tar)
 
             elasticsearch_doc = get_batch_elasticsearch_doc(archive_files,
@@ -126,14 +126,14 @@ def write_and_close_archive(archive_files, directory, tar):
     tar.close()
 
 
-def get_batch_files(directory, remaining_files_to_compact):
+def get_batch_files(directory, remaining_files_to_archive):
     batch_size = 0
     archive_files = [
-        file for file in remaining_files_to_compact
+        file for file in remaining_files_to_archive
         if (batch_size := batch_size + get_file_size_mb(os.path.join(directory, file))) <= MAX_BATCH_SIZE_MB
     ]
-    if not archive_files and remaining_files_to_compact:
-        archive_files = remaining_files_to_compact[:1]
+    if not archive_files and remaining_files_to_archive:
+        archive_files = remaining_files_to_archive[:1]
     return archive_files
 
 
