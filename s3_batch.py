@@ -44,11 +44,11 @@ def main():
         bucket_directory = os.path.join(S3_BUCKETS_FOLDER, bucket)
         for directory, subdirectories, files in os.walk(bucket_directory):
             if files:
-                create_batches_and_upload(bucket, directory, files, es)
+                create_upload_and_index_batches(bucket, directory, files, es)
     logging.info("Done")
 
 
-def create_batches_and_upload(bucket, directory, files, elasticsearch_connection):
+def create_upload_and_index_batches(bucket, directory, files, elasticsearch_connection):
     logging.info(bucket)
     logging.info(directory)
     remaining_files_to_archive = files
