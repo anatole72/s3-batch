@@ -16,7 +16,7 @@ def create_connection(**elastic_credentials_kwargs):
             verify_certs=elastic_credentials_kwargs.get("verify_certs", False)
         )
 
-        logging.info("Get Elasticsearch connection success")
+        logging.info("Get Elasticsearch connection successful")
         return elastic_connection
     except Exception:
         logging.error("Get Elasticsearch connection failed")

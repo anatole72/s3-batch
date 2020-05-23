@@ -57,37 +57,32 @@ def create_upload_and_index_batches(bucket, directory, files, elasticsearch_conn
     elasticsearch_docs = []
     with TemporaryDirectory() as temporary_directory:
         while remaining_files_to_archive:
-            tar = tarfile.open(os.path.join(temporary_directory, f"{uuid4()}.tar"), "w:")
-
             archive_files = get_batch_files(directory, remaining_files_to_archive)
-            write_and_close_archive(archive_files, directory, tar)
+            tar_info = create_archive(archive_files, temporary_directory)
             remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
-            s3_object_key, s3_object_prefix = send_archive_to_s3(bucket, s3_file_prefix, tar)
 
-            elasticsearch_doc = get_batch_elasticsearch_doc(archive_files,
-                                                            bucket,
-                                                            s3_object_key,
-                                                            s3_object_prefix,
-                                                            tar)
+            s3_object_key = send_archive_to_s3(bucket, s3_file_prefix, tar_info)
 
-            elasticsearch_docs.append(elasticsearch_doc)
+            batch_elasticsearch_doc = get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info)
+            elasticsearch_docs += batch_elasticsearch_doc
 
             for archive_file in archive_files:
-                os.remove(os.path.join(directory, archive_file))
+                os.remove(archive_file)
 
-            logging.info(archive_files)
+            logging.info("; ".join(archive_files))
             logging.info(os.path.join(bucket, s3_object_key))
 
     write_batch_indexes_to_elasticsearch(elasticsearch_connection, elasticsearch_docs)
 
 
-def get_batch_elasticsearch_doc(archive_files, bucket, s3_object_key, s3_object_prefix, tar):
-    return {"_id": os.path.join(bucket, s3_object_key),
-            "bucket": bucket,
-            "name": os.path.splitext(os.path.basename(tar.name))[0],
-            "ext": os.path.splitext(os.path.basename(tar.name))[1],
-            "prefix": s3_object_prefix,
-            "archive_content": archive_files}
+def get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info):
+    object_url = os.path.join("https://s3.console.aws.amazon.com/s3/object", bucket, s3_object_key)
+    return [{"_id": f"{os.path.join(bucket, s3_object_key)}:{member_name}",
+             "bucket": bucket,
+             "url": object_url,
+             "name": os.path.splitext(os.path.basename(tar_info["name"]))[0],
+             "archive_content": member_name}
+            for member_name in tar_info["members_names"]]
 
 
 def get_bucket_directory_and_prefix(bucket, directory):
@@ -101,7 +96,7 @@ def get_bucket_directory_and_prefix(bucket, directory):
 
 def write_batch_indexes_to_elasticsearch(elasticsearch_connection, elasticsearch_docs):
     date = datetime.utcnow().strftime("%Y.%m.%d")
-    elasticsearch_bulk_files = [{"_index": f"s3-bulk-{date}",
+    elasticsearch_bulk_files = [{"_index": f"s3-batch-{date}",
                                  "_type": "_doc",
                                  **doc}
                                 for doc in elasticsearch_docs]
@@ -109,21 +104,28 @@ def write_batch_indexes_to_elasticsearch(elasticsearch_connection, elasticsearch
                        elasticsearch_bulk_files)
 
 
-def send_archive_to_s3(bucket, s3_file_prefix, tar):
-    creation_date = datetime.fromtimestamp(os.path.getmtime(tar.name))
-    tar_basename = os.path.basename(tar.name)
+def send_archive_to_s3(bucket, s3_file_prefix, tar_info):
+    creation_date = tar_info["creation_date"]
+    tar_basename = os.path.basename(tar_info["name"])
     tar_date_partition = f"year={creation_date.year}/month={creation_date.month}/day={creation_date.day}"
     s3_object_prefix = f"{s3_file_prefix}/{tar_date_partition}"
     s3_object_key = f"{s3_object_prefix}/{tar_basename}"
-    s3_client.upload_file(tar.name, bucket, s3_object_key)
-    return s3_object_key, s3_object_prefix
+    s3_client.upload_file(tar_info["name"], bucket, s3_object_key)
+    return s3_object_key
 
 
-def write_and_close_archive(archive_files, directory, tar):
+def create_archive(archive_files, archive_dir):
+    tar = tarfile.open(os.path.join(archive_dir, f"{uuid4()}.tar"), "w:")
     for archive_file in archive_files:
-        tar.add(os.path.join(directory, archive_file),
-                arcname=archive_file)
+        tar.add(archive_file,
+                arcname=os.path.basename(archive_file))
+    tar_info = {
+        "name": tar.name,
+        "members_names": [member.name for member in tar.getmembers()],
+    }
     tar.close()
+    tar_info["creation_date"] = datetime.fromtimestamp(os.path.getmtime(tar_info["name"]))
+    return tar_info
 
 
 def get_batch_files(directory, remaining_files_to_archive):
@@ -134,7 +136,8 @@ def get_batch_files(directory, remaining_files_to_archive):
     ]
     if not archive_files and remaining_files_to_archive:
         archive_files = remaining_files_to_archive[:1]
-    return archive_files
+    return [os.path.join(directory, archive_file)
+            for archive_file in archive_files]
 
 
 if __name__ == '__main__':
