@@ -32,6 +32,14 @@ def list_directories(path):
     return next(os.walk(path))[1]
 
 
+def get_basename_without_extension(filename):
+    return os.path.splitext(os.path.basename(filename))[0]
+
+
+def get_filename_extension(filename):
+    return os.path.splitext(os.path.basename(filename))[1]
+
+
 def main():
     es = elasticsearch.create_connection(host=ELASTICSEARCH_LOGS_HOST,
                                          port=ELASTICSEARCH_LOGS_PORT,
@@ -80,8 +88,10 @@ def get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info):
     return [{"_id": f"{os.path.join(bucket, s3_object_key)}:{member_name}",
              "bucket": bucket,
              "url": object_url,
-             "name": os.path.splitext(os.path.basename(tar_info["name"]))[0],
-             "archive_content": member_name}
+             "name": get_basename_without_extension(tar_info["name"]),
+             "archive_content": member_name,
+             "archive_content_name": get_basename_without_extension(member_name),
+             "archive_content_extension": get_filename_extension(member_name)}
             for member_name in tar_info["members_names"]]
 
 
