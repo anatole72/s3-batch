@@ -15,6 +15,8 @@ def create_connection(**elastic_credentials_kwargs):
             use_ssl=elastic_credentials_kwargs.get("use_ssl", False),
             verify_certs=elastic_credentials_kwargs.get("verify_certs", False)
         )
+        if not elastic_connection.ping():
+            raise Exception("Unable to reach elasticsearch REST server")
 
         logging.info("Get Elasticsearch connection successful")
         return elastic_connection
