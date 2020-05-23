@@ -86,7 +86,7 @@ def create_upload_and_index_batches(bucket, directory, files, elasticsearch_conn
 
 def get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info):
     object_url = os.path.join("https://s3.console.aws.amazon.com/s3/object", bucket, s3_object_key)
-    date = tar_info["creation_date"].strftime("%Y.%m.%d")
+    date = tar_info["modification_date"].strftime("%Y.%m.%d")
     return [{"_id": f"{os.path.join(bucket, s3_object_key)}:{member_name}",
              "_index": f"s3-batch-{date}",
              "_type": "_doc",
@@ -109,9 +109,9 @@ def get_bucket_directory_and_prefix(bucket, directory):
 
 
 def send_archive_to_s3(bucket, s3_file_prefix, tar_info):
-    creation_date = tar_info["creation_date"]
+    modification_date = tar_info["modification_date"]
     tar_basename = os.path.basename(tar_info["name"])
-    tar_date_partition = f"year={creation_date.year}/month={creation_date.month}/day={creation_date.day}"
+    tar_date_partition = f"year={modification_date.year}/month={modification_date.month}/day={modification_date.day}"
     s3_object_prefix = f"{s3_file_prefix}/{tar_date_partition}"
     s3_object_key = f"{s3_object_prefix}/{tar_basename}"
     s3_client.upload_file(tar_info["name"], bucket, s3_object_key)
@@ -128,7 +128,7 @@ def create_archive(archive_files, archive_dir):
         "members_names": [member.name for member in tar.getmembers()],
     }
     tar.close()
-    tar_info["creation_date"] = datetime.fromtimestamp(os.path.getmtime(tar_info["name"]))
+    tar_info["modification_date"] = datetime.fromtimestamp(os.path.getmtime(tar_info["name"]))
     return tar_info
 
 
