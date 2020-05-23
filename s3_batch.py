@@ -45,6 +45,7 @@ def main():
         for directory, subdirectories, files in os.walk(bucket_directory):
             if files:
                 create_batches_and_upload(bucket, directory, files, es)
+    logging.info("Done")
 
 
 def create_batches_and_upload(bucket, directory, files, elasticsearch_connection):
@@ -68,7 +69,11 @@ def create_batches_and_upload(bucket, directory, files, elasticsearch_connection
                                                             s3_object_key,
                                                             s3_object_prefix,
                                                             tar)
+
             elasticsearch_docs.append(elasticsearch_doc)
+
+            for archive_file in archive_files:
+                os.remove(os.path.join(directory, archive_file))
 
             logging.info(archive_files)
             logging.info(os.path.join(bucket, s3_object_key))
