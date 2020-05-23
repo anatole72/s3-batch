@@ -80,12 +80,16 @@ def create_upload_and_index_batches(bucket, directory, files, elasticsearch_conn
             logging.info("; ".join(archive_files))
             logging.info(os.path.join(bucket, s3_object_key))
 
-    write_batch_indexes_to_elasticsearch(elasticsearch_connection, elasticsearch_docs)
+    elasticsearch_bulk(elasticsearch_connection,
+                       elasticsearch_docs)
 
 
 def get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info):
     object_url = os.path.join("https://s3.console.aws.amazon.com/s3/object", bucket, s3_object_key)
+    date = tar_info["creation_date"].strftime("%Y.%m.%d")
     return [{"_id": f"{os.path.join(bucket, s3_object_key)}:{member_name}",
+             "_index": f"s3-batch-{date}",
+             "_type": "_doc",
              "bucket": bucket,
              "url": object_url,
              "name": get_basename_without_extension(tar_info["name"]),
@@ -102,16 +106,6 @@ def get_bucket_directory_and_prefix(bucket, directory):
                       if has_prefix
                       else "")
     return s3_file_prefix
-
-
-def write_batch_indexes_to_elasticsearch(elasticsearch_connection, elasticsearch_docs):
-    date = datetime.utcnow().strftime("%Y.%m.%d")
-    elasticsearch_bulk_files = [{"_index": f"s3-batch-{date}",
-                                 "_type": "_doc",
-                                 **doc}
-                                for doc in elasticsearch_docs]
-    elasticsearch_bulk(elasticsearch_connection,
-                       elasticsearch_bulk_files)
 
 
 def send_archive_to_s3(bucket, s3_file_prefix, tar_info):
