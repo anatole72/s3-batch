@@ -93,8 +93,9 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
                 if files:
                     logging.info(directory)
                     logging.info(files)
-                    elasticsearch_docs += create_tar_archives(bucket, directory, files, temporary_directory)
-                    if elasticsearch_docs:
+                    bucket_elastcisearch_docs = create_tar_archives(bucket, directory, files, temporary_directory)
+                    if bucket_elastcisearch_docs:
+                        elasticsearch_docs += bucket_elastcisearch_docs
                         buckets_to_sync.append(bucket)
 
         # this step syncs buckets to s3. aws cli is used for convenience
@@ -203,9 +204,8 @@ def get_opened_files():
         try:
             yield (file[0] for file in psutil.Process(pid).open_files())
         except psutil.AccessDenied as e:
-            pass
-            # logging.warning("Access denied while getting process opened files")
-            # logging.warning(str(e))
+            logging.warning("Access denied while getting process opened files")
+            logging.warning(str(e))
 
 
 def get_batch_files(directory, remaining_files_to_archive):
