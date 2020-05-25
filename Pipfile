@@ -9,6 +9,7 @@ verify_ssl = true
 boto3 = "*"
 elasticsearch = ">=7.0.0,<8.0.0"
 logaugment = "*"
+psutil = "*"
 
 [requires]
 python_version = "3.8"

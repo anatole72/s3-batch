@@ -8,6 +8,7 @@ import tarfile
 from datetime import datetime
 from tempfile import TemporaryDirectory
 from uuid import uuid4
+import psutil
 
 import boto3
 from elasticsearch.helpers import bulk as elasticsearch_bulk
@@ -90,7 +91,8 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
             bucket_directory = os.path.join(S3_BUCKETS_FOLDER, bucket)
             for directory, subdirectories, files in os.walk(bucket_directory):
                 if files:
-                    logging.info(directory, files)
+                    logging.info(directory)
+                    logging.info(files)
                     elasticsearch_docs += create_tar_archives(bucket, directory, files, temporary_directory)
                     buckets_to_sync.append(bucket)
 
@@ -124,7 +126,6 @@ def create_tar_archives(bucket, directory, files, temporary_directory):
         s3_object_key = create_s3_object_key(s3_file_prefix, batch_id)
         tar_info = create_archive(bucket, s3_object_key, archive_files, temporary_directory)
         remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
-
         archive_files = filter_opened_files(archive_files)
 
         elasticsearch_docs += get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info)
@@ -181,7 +182,26 @@ def create_archive(bucket, s3_object_key, archive_files, archive_dir):
     return tar_info
 
 
-def filter_
+s3_opened_files = None
+
+
+def filter_opened_files(files):
+    global s3_opened_files
+    if s3_opened_files is None:
+        s3_opened_files = [opened_file
+                           for opened_files_by_process in get_opened_files()
+                           for opened_file in opened_files_by_process
+                           if S3_BUCKETS_FOLDER in opened_file]
+    return [file for file in files
+            if file not in s3_opened_files]
+
+
+def get_opened_files():
+    for pid in psutil.pids():
+        try:
+            yield (file[0] for file in psutil.Process(pid).open_files())
+        except psutil.AccessDenied:
+            print("Access denied")
 
 
 def get_batch_files(directory, remaining_files_to_archive):
