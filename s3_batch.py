@@ -55,6 +55,7 @@ def get_filename_extension(filename):
 
 
 def main():
+    logging.info("Start")
     os.makedirs(S3_BUCKETS_FOLDER, exist_ok=True)
     s3_buckets = list_directories(S3_BUCKETS_FOLDER)
 
@@ -89,6 +90,7 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
             bucket_directory = os.path.join(S3_BUCKETS_FOLDER, bucket)
             for directory, subdirectories, files in os.walk(bucket_directory):
                 if files:
+                    logging.info(directory, files)
                     elasticsearch_docs += create_tar_archives(bucket, directory, files, temporary_directory)
                     buckets_to_sync.append(bucket)
 
@@ -123,13 +125,12 @@ def create_tar_archives(bucket, directory, files, temporary_directory):
         tar_info = create_archive(bucket, s3_object_key, archive_files, temporary_directory)
         remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
 
+        archive_files = filter_opened_files(archive_files)
+
         elasticsearch_docs += get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info)
 
         for archive_file in archive_files:
             os.remove(archive_file)
-
-        logging.info(tar_info["name"])
-        logging.info(archive_files)
 
     return elasticsearch_docs
 
@@ -178,6 +179,9 @@ def create_archive(bucket, s3_object_key, archive_files, archive_dir):
     tar.close()
     tar_info["modification_date"] = datetime.fromtimestamp(os.path.getmtime(tar_info["name"]))
     return tar_info
+
+
+def filter_
 
 
 def get_batch_files(directory, remaining_files_to_archive):
