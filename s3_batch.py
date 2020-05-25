@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import boto3
 from elasticsearch.helpers import bulk as elasticsearch_bulk
+from elasticsearch.exceptions import ElasticsearchException
 
 from helpers import elasticsearch
 from logger import logging
@@ -104,7 +105,7 @@ def send_manifests_to_elasticsearch(elasticsearch_docs):
                                          http_auth=None)
     _, failed = elasticsearch_bulk(es, elasticsearch_docs, stats_only=True)
     if failed:
-        raise Exception(f"{failed} out of {len(elasticsearch_docs)} failed")
+        raise ElasticsearchException(f"{failed} out of {len(elasticsearch_docs)} failed")
 
 
 def create_tar_archives(bucket, directory, files, temporary_directory):
