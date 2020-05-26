@@ -1,7 +1,6 @@
 import gzip
 import json
 import os
-import subprocess
 import tarfile
 from datetime import datetime
 from tempfile import TemporaryDirectory
@@ -14,7 +13,7 @@ from helpers.files import (filter_opened_files,
                            get_file_size_mb,
                            get_filename_extension,
                            list_directories)
-from helpers.s3 import create_batch_s3_key, get_s3_file_prefix
+from helpers.s3 import create_batch_s3_key, get_s3_file_prefix, sync_bucket_folder
 from logger import logging
 
 s3_client = boto3.client("s3")
@@ -27,7 +26,7 @@ S3_BATCH_BUCKETS_FOLDER = os.environ.get('S3_BATCH_BUCKETS_FOLDER', os.path.expa
 
 
 def main():
-    logging.info("Start")
+    logging.info("Start s3 batch")
     os.makedirs(S3_BATCH_BUCKETS_FOLDER, exist_ok=True)
     s3_buckets = list_directories(S3_BATCH_BUCKETS_FOLDER)
 
@@ -71,8 +70,7 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
 
         # this step syncs buckets to s3. aws cli is used for convenience
         for bucket in buckets_to_sync:
-            directory_to_sync = os.path.join(temporary_directory, bucket)
-            subprocess.run(f"aws s3 sync {directory_to_sync} s3://{bucket}", shell=True)
+            sync_bucket_folder(bucket, temporary_directory)
     return elasticsearch_docs
 
 
@@ -80,13 +78,13 @@ def create_tar_archives(bucket, directory, files, temporary_directory):
     logging.info(bucket)
     logging.info(directory)
     remaining_files_to_archive = files
-    s3_file_prefix = get_s3_file_prefix(bucket, directory)
+    s3_file_prefix = get_s3_file_prefix(bucket, directory, S3_BATCH_BUCKETS_FOLDER)
 
     elasticsearch_docs = []
     while remaining_files_to_archive:
         archive_files = get_batch_files(directory, remaining_files_to_archive)
         remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
-        archive_files = filter_opened_files(archive_files)
+        archive_files = filter_opened_files(archive_files, S3_BATCH_BUCKETS_FOLDER)
 
         if archive_files:
             s3_object_key = create_batch_s3_key(s3_file_prefix)
