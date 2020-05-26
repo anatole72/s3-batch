@@ -2,7 +2,7 @@ import hashlib
 import logging
 
 from elasticsearch import Elasticsearch, ElasticsearchException
-from elasticsearch.helpers import bulk, bulk as elasticsearch_bulk
+from elasticsearch.helpers import bulk
 
 from logger import logging
 from s3_batch import ELASTICSEARCH_LOGS_HOST, ELASTICSEARCH_LOGS_PORT
@@ -47,9 +47,9 @@ def hash_sha256(string):
 
 
 def send_docs_to_elasticsearch(elasticsearch_docs):
-    es = elasticsearch.create_connection(host=ELASTICSEARCH_LOGS_HOST,
-                                         port=ELASTICSEARCH_LOGS_PORT,
-                                         http_auth=None)
-    _, failed = elasticsearch_bulk(es, elasticsearch_docs, stats_only=True)
+    es = create_connection(host=ELASTICSEARCH_LOGS_HOST,
+                           port=ELASTICSEARCH_LOGS_PORT,
+                           http_auth=None)
+    _, failed = bulk(es, elasticsearch_docs, stats_only=True)
     if failed:
         raise ElasticsearchException(f"{failed} out of {len(elasticsearch_docs)} failed")
