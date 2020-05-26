@@ -18,8 +18,6 @@ from logger import logging
 
 s3_client = boto3.client("s3")
 
-ELASTICSEARCH_LOGS_HOST = os.environ['ELASTICSEARCH_LOGS_HOST']
-ELASTICSEARCH_LOGS_PORT = os.environ['ELASTICSEARCH_LOGS_PORT']
 MANIFEST_FALLBACK_BUCKET = os.environ['MANIFEST_FALLBACK_BUCKET']
 MAX_BATCH_SIZE_MB = int(os.environ.get('MAX_BATCH_SIZE_MB', 1024))
 S3_BATCH_BUCKETS_FOLDER = os.environ.get('S3_BATCH_BUCKETS_FOLDER', os.path.expandvars("$HOME/batch_buckets"))

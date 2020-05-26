@@ -1,11 +1,14 @@
 import hashlib
 import logging
+import os
 
 from elasticsearch import Elasticsearch, ElasticsearchException
 from elasticsearch.helpers import bulk
 
 from logger import logging
-from s3_batch import ELASTICSEARCH_LOGS_HOST, ELASTICSEARCH_LOGS_PORT
+
+ELASTICSEARCH_LOGS_HOST = os.environ['ELASTICSEARCH_LOGS_HOST']
+ELASTICSEARCH_LOGS_PORT = os.environ['ELASTICSEARCH_LOGS_PORT']
 
 
 def create_connection(**elastic_credentials_kwargs):
