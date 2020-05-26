@@ -1,93 +1,108 @@
+import gzip
+import json
 import os
-import re
+import subprocess
 import tarfile
 from datetime import datetime
 from tempfile import TemporaryDirectory
-from uuid import uuid4
 
 import boto3
-from elasticsearch.helpers import bulk as elasticsearch_bulk
 
-from helpers import elasticsearch
+from helpers.elasticsearch import hash_sha256, send_docs_to_elasticsearch
+from helpers.files import (filter_opened_files,
+                           get_basename_without_extension,
+                           get_file_size_mb,
+                           get_filename_extension,
+                           list_directories)
+from helpers.s3 import create_batch_s3_key, get_s3_file_prefix
 from logger import logging
 
 s3_client = boto3.client("s3")
 
 ELASTICSEARCH_LOGS_HOST = os.environ['ELASTICSEARCH_LOGS_HOST']
 ELASTICSEARCH_LOGS_PORT = os.environ['ELASTICSEARCH_LOGS_PORT']
+MANIFEST_FALLBACK_BUCKET = os.environ['MANIFEST_FALLBACK_BUCKET']
 MAX_BATCH_SIZE_MB = int(os.environ.get('MAX_BATCH_SIZE_MB', 1024))
-S3_BUCKETS_FOLDER = os.environ.get('S3_BUCKETS_FOLDER', os.path.expandvars("$HOME/buckets"))
-
-
-def get_file_size_mb(file_path):
-    file_stats = os.stat(file_path)
-    return file_stats.st_size / (1024 * 1024)
-
-
-def list_files(path):
-    return next(os.walk(path))[2]
-
-
-def list_directories(path):
-    return next(os.walk(path))[1]
-
-
-def get_basename_without_extension(filename):
-    return os.path.splitext(os.path.basename(filename))[0]
-
-
-def get_filename_extension(filename):
-    return os.path.splitext(os.path.basename(filename))[1]
+S3_BATCH_BUCKETS_FOLDER = os.environ.get('S3_BATCH_BUCKETS_FOLDER', os.path.expandvars("$HOME/batch_buckets"))
 
 
 def main():
-    es = elasticsearch.create_connection(host=ELASTICSEARCH_LOGS_HOST,
-                                         port=ELASTICSEARCH_LOGS_PORT,
-                                         http_auth=None)
+    logging.info("Start")
+    os.makedirs(S3_BATCH_BUCKETS_FOLDER, exist_ok=True)
+    s3_buckets = list_directories(S3_BATCH_BUCKETS_FOLDER)
 
-    os.makedirs(S3_BUCKETS_FOLDER, exist_ok=True)
-    s3_buckets = list_directories(S3_BUCKETS_FOLDER)
+    elasticsearch_docs = create_batch_archives_and_send_to_s3(s3_buckets)
 
-    for bucket in s3_buckets:
-        bucket_directory = os.path.join(S3_BUCKETS_FOLDER, bucket)
-        for directory, subdirectories, files in os.walk(bucket_directory):
-            if files:
-                create_upload_and_index_batches(bucket, directory, files, es)
+    try:
+        send_docs_to_elasticsearch(elasticsearch_docs)
+    except Exception as error:
+        log_error_and_upload_manifests_to_s3(error, elasticsearch_docs)
+
     logging.info("Done")
 
 
-def create_upload_and_index_batches(bucket, directory, files, elasticsearch_connection):
+def log_error_and_upload_manifests_to_s3(error, elasticsearch_docs):
+    logging.error("Exception caught while sending manifests to elasticsearch")
+    logging.error(str(error))
+    logging.info("Uploading manifests to s3 fallback bucket")
+    s3_client.put_object(Bucket=MANIFEST_FALLBACK_BUCKET,
+                         Key=os.path.join(f"s3-batch/manifests/{datetime.utcnow().strftime('%Y-%m-%d')}.json.gz"),
+                         Body=gzip.compress(json.dumps(elasticsearch_docs).encode("utf-8")),
+                         ACL="private")
+
+
+def create_batch_archives_and_send_to_s3(s3_buckets):
+    elasticsearch_docs = []
+    with TemporaryDirectory() as temporary_directory:
+        buckets_to_sync = []
+
+        # this step only creates the archives and deletes original files
+        # the archive creation and s3 sync decouple is done so to avoid race conditions to S3_SYNC_BUCKETS_FOLDER
+        for bucket in s3_buckets:
+            bucket_directory = os.path.join(S3_BATCH_BUCKETS_FOLDER, bucket)
+            for directory, subdirectories, files in os.walk(bucket_directory):
+                if files:
+                    logging.info(directory)
+                    logging.info(files)
+                    bucket_elasticsearch_docs = create_tar_archives(bucket, directory, files, temporary_directory)
+                    if bucket_elasticsearch_docs:
+                        elasticsearch_docs += bucket_elasticsearch_docs
+                        buckets_to_sync.append(bucket)
+
+        # this step syncs buckets to s3. aws cli is used for convenience
+        for bucket in buckets_to_sync:
+            directory_to_sync = os.path.join(temporary_directory, bucket)
+            subprocess.run(f"aws s3 sync {directory_to_sync} s3://{bucket}", shell=True)
+    return elasticsearch_docs
+
+
+def create_tar_archives(bucket, directory, files, temporary_directory):
     logging.info(bucket)
     logging.info(directory)
     remaining_files_to_archive = files
-    s3_file_prefix = get_bucket_directory_and_prefix(bucket, directory)
+    s3_file_prefix = get_s3_file_prefix(bucket, directory)
 
     elasticsearch_docs = []
-    with TemporaryDirectory() as temporary_directory:
-        while remaining_files_to_archive:
-            archive_files = get_batch_files(directory, remaining_files_to_archive)
-            tar_info = create_archive(archive_files, temporary_directory)
-            remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
+    while remaining_files_to_archive:
+        archive_files = get_batch_files(directory, remaining_files_to_archive)
+        remaining_files_to_archive = remaining_files_to_archive[len(archive_files):]
+        archive_files = filter_opened_files(archive_files)
 
-            s3_object_key = send_archive_to_s3(bucket, s3_file_prefix, tar_info)
-
-            batch_elasticsearch_doc = get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info)
-            elasticsearch_docs += batch_elasticsearch_doc
+        if archive_files:
+            s3_object_key = create_batch_s3_key(s3_file_prefix)
+            tar_info = create_archive(bucket, s3_object_key, archive_files, temporary_directory)
+            elasticsearch_docs += get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info)
 
             for archive_file in archive_files:
                 os.remove(archive_file)
 
-            logging.info("; ".join(archive_files))
-            logging.info(os.path.join(bucket, s3_object_key))
-
-    elasticsearch_bulk(elasticsearch_connection,
-                       elasticsearch_docs)
+    return elasticsearch_docs
 
 
 def get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info):
     object_url = os.path.join("https://s3.console.aws.amazon.com/s3/object", bucket, s3_object_key)
     date = tar_info["modification_date"].strftime("%Y.%m.%d")
-    return [{"_id": f"{os.path.join(bucket, s3_object_key)}:{member_name}",
+    return [{"_id": hash_sha256(f"{os.path.join(bucket, s3_object_key)}:{member_name}"),
              "_index": f"s3-batch-{date}",
              "_type": "_doc",
              "bucket": bucket,
@@ -99,27 +114,10 @@ def get_batch_elasticsearch_docs(bucket, s3_object_key, tar_info):
             for member_name in tar_info["members_names"]]
 
 
-def get_bucket_directory_and_prefix(bucket, directory):
-    bucket_directory = os.path.join(S3_BUCKETS_FOLDER, bucket)
-    has_prefix = re.match(f"{bucket_directory}/(.*)", directory)
-    s3_file_prefix = (has_prefix.group(1)
-                      if has_prefix
-                      else "")
-    return s3_file_prefix
-
-
-def send_archive_to_s3(bucket, s3_file_prefix, tar_info):
-    modification_date = tar_info["modification_date"]
-    tar_basename = os.path.basename(tar_info["name"])
-    tar_date_partition = f"year={modification_date.year}/month={modification_date.month}/day={modification_date.day}"
-    s3_object_prefix = f"{s3_file_prefix}/{tar_date_partition}"
-    s3_object_key = f"{s3_object_prefix}/{tar_basename}"
-    s3_client.upload_file(tar_info["name"], bucket, s3_object_key)
-    return s3_object_key
-
-
-def create_archive(archive_files, archive_dir):
-    tar = tarfile.open(os.path.join(archive_dir, f"{uuid4()}.tar"), "w:")
+def create_archive(bucket, s3_object_key, archive_files, archive_dir):
+    archive_full_path = os.path.join(archive_dir, bucket, s3_object_key)
+    os.makedirs(os.path.dirname(archive_full_path), exist_ok=True)
+    tar = tarfile.open(archive_full_path, "w:")
     for archive_file in archive_files:
         tar.add(archive_file,
                 arcname=os.path.basename(archive_file))
