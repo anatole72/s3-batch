@@ -7,7 +7,7 @@ from helpers.files import list_directories
 from helpers.s3 import get_s3_file_prefix, sync_bucket_folder
 from logger import logging
 
-S3_SYNC_BUCKETS_FOLDER = os.environ.get('S3_SYNC_BUCKETS_FOLDER', os.path.expandvars("$HOME/sync_buckets"))
+S3_SYNC_BUCKETS_FOLDER = os.environ.get('S3_SYNC_BUCKETS_FOLDER', os.path.expandvars("$HOME/s3_buckets/sync"))
 
 
 def main():
