@@ -30,10 +30,11 @@ def main():
 
     elasticsearch_docs = create_batch_archives_and_send_to_s3(s3_buckets)
 
-    try:
-        send_docs_to_elasticsearch(elasticsearch_docs)
-    except Exception as error:
-        log_error_and_upload_manifests_to_s3(error, elasticsearch_docs)
+    if elasticsearch_docs:
+        try:
+            send_docs_to_elasticsearch(elasticsearch_docs)
+        except Exception as error:
+            log_error_and_upload_manifests_to_s3(error, elasticsearch_docs)
 
     logging.info("Done")
 
