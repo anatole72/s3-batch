@@ -15,7 +15,7 @@ def main():
     os.makedirs(S3_SYNC_BUCKETS_FOLDER, exist_ok=True)
     s3_buckets = list_directories(S3_SYNC_BUCKETS_FOLDER)
     move_ready_files_to_temp_dir_and_sync(s3_buckets)
-    logging.info("Done")
+    logging.info("Sync Done")
 
 
 def move_ready_files_to_temp_dir_and_sync(s3_buckets):
@@ -27,8 +27,8 @@ def move_ready_files_to_temp_dir_and_sync(s3_buckets):
             bucket_directory = os.path.join(S3_SYNC_BUCKETS_FOLDER, bucket)
             for directory, subdirectories, files in os.walk(bucket_directory):
                 if files:
-                    logging.info(directory)
-                    logging.info(files)
+                    logging.debug(directory)
+                    logging.debug(files)
                     move_ready_files_to_temp_dir(bucket, directory, files, temporary_directory)
                     buckets_to_sync.append(bucket)
 

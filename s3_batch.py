@@ -36,7 +36,7 @@ def main():
         except Exception as error:
             log_error_and_upload_manifests_to_s3(error, elasticsearch_docs)
 
-    logging.info("Done")
+    logging.info("Batch Done")
 
 
 def log_error_and_upload_manifests_to_s3(error, elasticsearch_docs):
@@ -96,7 +96,7 @@ def create_tar_archives(bucket, directory, files, temporary_directory):
             for archive_file in archive_files:
                 os.remove(archive_file)
 
-            logging.info(f"Archive created: {os.path.basename(tar_info['name'])} {os.path.getsize(tar_info['name'])} ")
+            logging.info(f"Archive created: {os.path.basename(tar_info['name'])}, {get_file_size_mb(tar_info['name'])}MB, {len(archive_files)} files")
     return elasticsearch_docs
 
 
