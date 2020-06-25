@@ -29,22 +29,22 @@ def get_filename_extension(filename):
 s3_opened_files = None
 
 
-def filter_opened_files(files, base_folder, warnings=True):
+def filter_opened_files(files, base_folder, log_errors=True):
     global s3_opened_files
     if s3_opened_files is None:
         s3_opened_files = [opened_file
-                           for opened_files_by_process in get_opened_files(warnings)
+                           for opened_files_by_process in get_opened_files(log_errors)
                            for opened_file in opened_files_by_process
                            if base_folder in opened_file]
     return [file for file in files
             if file not in s3_opened_files]
 
 
-def get_opened_files(warnings=True):
+def get_opened_files(log_errors=True):
     for pid in psutil.pids():
         try:
             yield (file[0] for file in psutil.Process(pid).open_files())
         except psutil.AccessDenied as e:
-            if warnings:
-                logging.warning("Access denied while getting process opened files")
-                logging.warning(str(e))
+            if log_errors:
+                logging.error("Access denied while getting process opened files")
+                logging.exception(e)

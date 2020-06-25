@@ -36,12 +36,12 @@ def main():
         except Exception as error:
             log_error_and_upload_manifests_to_s3(error, elasticsearch_docs)
 
-    logging.info("Done")
+    logging.info("Batch Done")
 
 
 def log_error_and_upload_manifests_to_s3(error, elasticsearch_docs):
     logging.error("Exception caught while sending manifests to elasticsearch")
-    logging.error(str(error))
+    logging.exception(error)
     logging.info("Uploading manifests to s3 fallback bucket")
     s3_client.put_object(Bucket=MANIFEST_FALLBACK_BUCKET,
                          Key=os.path.join(f"s3-batch/manifests/{datetime.utcnow().strftime('%Y-%m-%d')}.json.gz"),
@@ -60,8 +60,8 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
             bucket_directory = os.path.join(S3_BATCH_BUCKETS_FOLDER, bucket)
             for directory, subdirectories, files in os.walk(bucket_directory):
                 if files:
-                    logging.info(directory)
-                    logging.info(files)
+                    logging.debug(directory)
+                    logging.debug(files)
                     bucket_elasticsearch_docs = create_tar_archives(bucket, directory, files, temporary_directory)
                     if bucket_elasticsearch_docs:
                         elasticsearch_docs += bucket_elasticsearch_docs
@@ -69,13 +69,16 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
 
         # this step syncs buckets to s3. aws cli is used for convenience
         for bucket in buckets_to_sync:
-            sync_bucket_folder_and_delete_files(bucket, temporary_directory)
+            try:
+                sync_bucket_folder_and_delete_files(bucket, temporary_directory)
+            except Exception as e:
+                logging.exception(e)
     return elasticsearch_docs
 
 
 def create_tar_archives(bucket, directory, files, temporary_directory):
-    logging.info(bucket)
-    logging.info(directory)
+    logging.debug(bucket)
+    logging.debug(directory)
     remaining_files_to_archive = files
     s3_file_prefix = get_s3_file_prefix(bucket, directory, S3_BATCH_BUCKETS_FOLDER)
 
@@ -92,6 +95,8 @@ def create_tar_archives(bucket, directory, files, temporary_directory):
 
             for archive_file in archive_files:
                 os.remove(archive_file)
+
+            logging.info(f"Archive created: {os.path.basename(tar_info['name'])}, {get_file_size_mb(tar_info['name'])}MB, {len(archive_files)} files")
     return elasticsearch_docs
 
 
@@ -119,7 +124,7 @@ def create_archive(bucket, s3_object_key, archive_files, archive_dir):
                 arcname=os.path.basename(archive_file))
     tar_info = {
         "name": tar.name,
-        "members_names": [member.name for member in tar.getmembers()],
+        "members_names": [member.name for member in tar.getmembers()]
     }
     tar.close()
     tar_info["modification_date"] = datetime.fromtimestamp(os.path.getmtime(tar_info["name"]))

@@ -1,11 +1,12 @@
 import os
 import re
-import subprocess
 from uuid import uuid4
+
 import boto3
 
-
 s3_client = boto3.client("s3")
+
+from logger import logging
 
 
 def get_s3_file_prefix(bucket, directory, buckets_folder):
@@ -31,5 +32,8 @@ def sync_bucket_folder_and_delete_files(bucket, buckets_directory):
             filename = os.path.join(dir, file)
             key = os.path.relpath(filename,
                                   directory_to_sync)
-            s3_client.upload_file(filename, bucket, key)
-            os.remove(filename)
+            try:
+                s3_client.upload_file(filename, bucket, key)
+                os.remove(filename)
+            except Exception as e:
+                logging.exception(e)
