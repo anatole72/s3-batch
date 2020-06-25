@@ -2,6 +2,10 @@ import os
 import re
 import subprocess
 from uuid import uuid4
+import boto3
+
+
+s3_client = boto3.client("s3")
 
 
 def get_s3_file_prefix(bucket, directory, buckets_folder):
@@ -20,6 +24,12 @@ def create_batch_s3_key(s3_object_prefix):
     return s3_object_key
 
 
-def sync_bucket_folder(bucket, buckets_directory):
+def sync_bucket_folder_and_delete_files(bucket, buckets_directory):
     directory_to_sync = os.path.join(buckets_directory, bucket)
-    subprocess.run(f"aws s3 sync {directory_to_sync} s3://{bucket}", shell=True)
+    for dir, subdirs, files in os.walk(directory_to_sync):
+        for file in files:
+            filename = os.path.join(dir, file)
+            key = os.path.relpath(filename,
+                                  directory_to_sync)
+            s3_client.upload_file(filename, bucket, key)
+            os.remove(filename)
