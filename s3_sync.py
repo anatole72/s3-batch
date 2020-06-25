@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 
 from helpers.files import filter_opened_files
 from helpers.files import list_directories
-from helpers.s3 import get_s3_file_prefix, sync_bucket_folder
+from helpers.s3 import get_s3_file_prefix, sync_bucket_folder_and_delete_files
 from logger import logging
 
 S3_SYNC_BUCKETS_FOLDER = os.environ.get('S3_SYNC_BUCKETS_FOLDER', os.path.expandvars("$HOME/s3_buckets/sync"))
@@ -34,7 +34,7 @@ def move_ready_files_to_temp_dir_and_sync(s3_buckets):
 
         # this step syncs buckets to s3. aws cli is used for convenience
         for bucket in buckets_to_sync:
-            sync_bucket_folder(bucket, temporary_directory)
+            sync_bucket_folder_and_delete_files(bucket, temporary_directory)
 
 
 def move_ready_files_to_temp_dir(bucket, directory, files, temporary_directory):

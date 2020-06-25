@@ -13,7 +13,7 @@ from helpers.files import (filter_opened_files,
                            get_file_size_mb,
                            get_filename_extension,
                            list_directories)
-from helpers.s3 import create_batch_s3_key, get_s3_file_prefix, sync_bucket_folder
+from helpers.s3 import create_batch_s3_key, get_s3_file_prefix, sync_bucket_folder_and_delete_files
 from logger import logging
 
 s3_client = boto3.client("s3")
@@ -69,7 +69,7 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
 
         # this step syncs buckets to s3. aws cli is used for convenience
         for bucket in buckets_to_sync:
-            sync_bucket_folder(bucket, temporary_directory)
+            sync_bucket_folder_and_delete_files(bucket, temporary_directory)
     return elasticsearch_docs
 
 
@@ -92,7 +92,6 @@ def create_tar_archives(bucket, directory, files, temporary_directory):
 
             for archive_file in archive_files:
                 os.remove(archive_file)
-
     return elasticsearch_docs
 
 
