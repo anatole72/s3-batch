@@ -40,7 +40,7 @@ def move_ready_files_to_temp_dir_and_sync(s3_buckets):
 def move_ready_files_to_temp_dir(bucket, directory, files, temporary_directory):
     full_path_files = (os.path.join(directory, file)
                        for file in files)
-    files_ready_to_sync = filter_opened_files(full_path_files, S3_SYNC_BUCKETS_FOLDER, warnings=False)
+    files_ready_to_sync = filter_opened_files(full_path_files, S3_SYNC_BUCKETS_FOLDER, log_errors=False)
     s3_file_prefix = get_s3_file_prefix(bucket, directory, S3_SYNC_BUCKETS_FOLDER)
     destination_folder = os.path.join(temporary_directory, bucket, s3_file_prefix)
     os.makedirs(destination_folder, exist_ok=True)

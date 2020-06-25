@@ -25,7 +25,7 @@ def create_connection(**elastic_credentials_kwargs):
         if not elastic_connection.ping():
             raise Exception("Unable to reach elasticsearch REST server")
 
-        logging.info("Get Elasticsearch connection successful")
+        logging.debug("Get Elasticsearch connection successful")
         return elastic_connection
     except Exception:
         logging.error("Get Elasticsearch connection failed")
@@ -35,7 +35,7 @@ def create_connection(**elastic_credentials_kwargs):
 def send_bulk(elastic_connection, elastic_docs):
     try:
         bulk(elastic_connection, elastic_docs)
-        logging.info("Send documents to Elasticsearch success")
+        logging.debug("Send documents to Elasticsearch success")
     except Exception:
         logging.error("Send documents to Elasticsearch failed")
         raise
