@@ -52,7 +52,7 @@ def log_error_and_upload_manifests_to_s3(error, elasticsearch_docs):
 def create_batch_archives_and_send_to_s3(s3_buckets):
     elasticsearch_docs = []
     with TemporaryDirectory() as temporary_directory:
-        buckets_to_sync = []
+        buckets_to_sync = set()
 
         # this step only creates the archives and deletes original files
         # the archive creation and s3 sync decouple is done so to avoid race conditions to S3_SYNC_BUCKETS_FOLDER
@@ -65,9 +65,9 @@ def create_batch_archives_and_send_to_s3(s3_buckets):
                     bucket_elasticsearch_docs = create_tar_archives(bucket, directory, files, temporary_directory)
                     if bucket_elasticsearch_docs:
                         elasticsearch_docs += bucket_elasticsearch_docs
-                        buckets_to_sync.append(bucket)
+                        buckets_to_sync.add(bucket)
 
-        # this step syncs buckets to s3. aws cli is used for convenience
+        # this step syncs buckets to s3 using s3_client.upload_file for performance
         for bucket in buckets_to_sync:
             try:
                 sync_bucket_folder_and_delete_files(bucket, temporary_directory)
