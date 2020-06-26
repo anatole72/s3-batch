@@ -48,3 +48,8 @@ def get_opened_files(log_errors=True):
             if log_errors:
                 logging.error("Access denied while getting process opened files")
                 logging.exception(e)
+        except psutil.NoSuchProcess:
+            logging.debug("Process no longer exists")
+        except Exception as e:
+            if log_errors:
+                logging.exception(e)
