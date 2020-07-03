@@ -56,6 +56,8 @@ The configuration is done through environment variables:
 
 # Documentation
 
+## Paths
+
 The S3 Batch works by looking for files in a specific directory and uploading the created archives to S3. It respects the original intended partition of the object key.
 
 The script expects the directory path to use the following structure:
@@ -71,6 +73,82 @@ S3 Sync uses the same structure, but instead of creating an archive it just uplo
 ```
 $S3_SYNC_BUCKETS_FOLDER/<bucket-name>/<object-key>
 ```
+
+## ElasticSearch Index
+
+Documents sent to ElasticSearch expect the index pattern `s3-batch-*` to use the following mapping:
+
+```
+{
+  "properties": {
+    "archive_content": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "archive_content_extension": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "archive_content_name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "bucket": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "url": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    }
+  }
+}
+```
+| Property | Description | Example |
+|--|--|--|
+| archive_content | The original object key basename | example.tar.gz |
+| archive_content_extension | The extension of the original object key | .gz |
+| archive_content_name | The original object key basename without the extension | example.tar |
+| bucket | The destination bucket | example-bucket |
+| name | The archive name (UUID) | 0edb5a9f-7dee-4dcb-80f9-b6fc91cbfb99 |
+| url | The S3 Object URL where the archive S3 Object is | https://s3.console.aws.amazon.com/s3/object/example-bucket/example/path/to/object/0edb5a9f-7dee-4dcb-80f9-b6fc91cbfb99.tar |
+
+
+"archive_content", "archive_content_extension", "archive_content_name", "bucket", "name", "url"
 
 ## How does the batch work?
 
