@@ -148,8 +148,6 @@ Documents sent to ElasticSearch expect the index pattern `s3-batch-*` to use the
 | url | The S3 Object URL where the archive S3 Object is | https://s3.console.aws.amazon.com/s3/object/example-bucket/example/path/to/object/0edb5a9f-7dee-4dcb-80f9-b6fc91cbfb99.tar |
 
 
-"archive_content", "archive_content_extension", "archive_content_name", "bucket", "name", "url"
-
 ## How does the batch work?
 
 - It begins by listing all the files in the directory and locking the list to that specific moment.
